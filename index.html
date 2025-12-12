@@ -117,11 +117,8 @@
         .value-cell { font-weight: 600; }
         .value-cell.routine { color: #004080; }
         .value-cell.population { color: #6c757d; }
-        .arrow-cell { color: #28a745; font-weight: 700; font-size: 16px; }
         
         .button-group { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 2rem; }
-        
-        .applied-indicator { display: inline-block; padding: 4px 10px; background: #007bff; color: #fff; border-radius: 4px; font-size: 11px; font-weight: 700; margin-left: 8px; }
         
         .page-footer { background-color: #004080; color: #ffffff; padding: 20px 30px; text-align: center; font-size: 13px; line-height: 1.7; border-radius: 0 0 8px 8px; }
         .page-footer p { margin: 6px 0 0; font-size: 12px; }
@@ -243,7 +240,7 @@
                     <div class="config-card">
                         <h4>Set Match Threshold</h4>
                         <p style="color: #666; font-size: 13px; margin-bottom: 1rem;">
-                            Population values with similarity ≥ threshold will be mapped to routine values. Each routine value can only be matched once (exclusive matching).
+                            Population values with similarity score ≥ threshold will be marked as MATCH and use the routine value. Values below threshold remain UNMATCH and keep original.
                         </p>
                         <div class="slider-container">
                             <input type="range" id="threshold" class="slider" min="0" max="100" value="70">
@@ -296,6 +293,7 @@
         // Global variables
         let routineData = null;
         let populationData = null;
+        let originalPopulationData = null;
         let matchingResults = null;
         let routineFileName = '';
         let populationFileName = '';
@@ -328,18 +326,13 @@
         }
 
         function showStep(stepNumber) {
-            // Hide all steps
             for (let i = 1; i <= 4; i++) {
                 document.getElementById(`step${i}`).classList.add('hidden');
                 document.getElementById(`stepBadge${i}`).classList.remove('active', 'completed');
             }
-            
-            // Mark previous steps as completed
             for (let i = 1; i < stepNumber; i++) {
                 document.getElementById(`stepBadge${i}`).classList.add('completed');
             }
-            
-            // Show current step
             document.getElementById(`step${stepNumber}`).classList.remove('hidden');
             document.getElementById(`stepBadge${stepNumber}`).classList.add('active');
         }
@@ -364,6 +357,7 @@
                             routineFileName = fileName;
                         } else {
                             populationData = results.data;
+                            originalPopulationData = JSON.parse(JSON.stringify(results.data));
                             populationFileName = fileName;
                         }
                         statusEl.innerHTML = `<span class="file-status loaded">✓ ${fileName} (${results.data.length} rows)</span>`;
@@ -387,6 +381,7 @@
                             routineFileName = fileName;
                         } else {
                             populationData = jsonData;
+                            originalPopulationData = JSON.parse(JSON.stringify(jsonData));
                             populationFileName = fileName;
                         }
                         statusEl.innerHTML = `<span class="file-status loaded">✓ ${fileName} (${jsonData.length} rows)</span>`;
@@ -446,8 +441,12 @@
                     return newRow;
                 });
                 
-                if (type === 'routine') routineData = renamedData;
-                else populationData = renamedData;
+                if (type === 'routine') {
+                    routineData = renamedData;
+                } else {
+                    populationData = renamedData;
+                    originalPopulationData = JSON.parse(JSON.stringify(renamedData));
+                }
             });
             
             setupColumnSelection();
@@ -470,7 +469,6 @@
                 populationSelect.innerHTML += `<option value="${col}">${col}</option>`;
             });
             
-            // Auto-select if column names contain common patterns
             const namePatterns = ['name', 'facility', 'hf', 'location', 'site', 'area', 'district', 'chiefdom'];
             
             [routineSelect, populationSelect].forEach(select => {
@@ -487,7 +485,6 @@
             });
         }
 
-        // Store column names globally
         let matchColRoutine = '';
         let matchColPopulation = '';
 
@@ -505,12 +502,14 @@
             matchColPopulation = populationCol;
             changesApplied = false;
             
+            // Reset population data to original
+            populationData = JSON.parse(JSON.stringify(originalPopulationData));
+            
             // Reset button visibility
             document.getElementById('applyChangesBtn').classList.remove('hidden');
             document.getElementById('downloadExcelBtn').classList.add('hidden');
             document.getElementById('downloadCSVBtn').classList.add('hidden');
             
-            // Show loading immediately
             showStep(4);
             document.getElementById('resultsStats').innerHTML = '';
             document.getElementById('resultsContainer').innerHTML = `
@@ -520,10 +519,8 @@
                 </div>
             `;
             
-            // Use setTimeout to allow UI to update
             setTimeout(() => {
                 try {
-                    // Step 1: Extract UNIQUE values only
                     const routineUnique = [...new Set(
                         routineData.map(r => String(r[routineCol] || '').trim()).filter(v => v)
                     )];
@@ -532,13 +529,12 @@
                     )];
                     
                     document.getElementById('matchProgress').textContent = 
-                        `Found ${routineUnique.length} unique routine values, ${populationUnique.length} unique population values. Matching...`;
+                        `Found ${routineUnique.length} routine values, ${populationUnique.length} population values. Matching...`;
                     
                     setTimeout(() => {
-                        // Step 2: Match UNIQUE population values to routine values (exclusive matching)
-                        matchingResults = matchUniqueValuesExclusive(populationUnique, routineUnique, threshold, populationCol);
+                        matchingResults = matchUniqueValues(populationUnique, routineUnique, threshold, populationCol);
                         displayResults(threshold);
-                        showAlert(`Done! Matched ${populationUnique.length} unique population values.`, 'success');
+                        showAlert(`Matching complete! Threshold: ${threshold}%`, 'success');
                     }, 50);
                     
                 } catch (error) {
@@ -548,80 +544,57 @@
         }
 
         /**
-         * Match unique population values to unique routine values with EXCLUSIVE matching
-         * Once a routine value is matched, it's removed from the pool
+         * Match unique population values to routine values
+         * Any routine value can match multiple population values
          */
-        function matchUniqueValuesExclusive(populationUnique, routineUnique, threshold, populationCol) {
-            // Count occurrences in population data for each unique value
+        function matchUniqueValues(populationUnique, routineUnique, threshold, populationCol) {
             const popCounts = {};
             populationData.forEach(row => {
                 const val = String(row[populationCol] || '').trim();
                 popCounts[val] = (popCounts[val] || 0) + 1;
             });
             
-            // First pass: calculate best match scores for all population values
-            const allMatches = populationUnique.map(popValue => {
+            const routineLowerMap = routineUnique.map(v => ({ original: v, lower: v.toLowerCase() }));
+            
+            const results = [];
+            
+            populationUnique.forEach(popValue => {
                 const popLower = popValue.toLowerCase();
+                
                 let bestMatch = null;
                 let bestScore = 0;
                 
-                for (const routineValue of routineUnique) {
-                    const routineLower = routineValue.toLowerCase();
-                    
-                    // Exact match check
-                    if (popLower === routineLower) {
-                        bestMatch = routineValue;
+                for (const routine of routineLowerMap) {
+                    if (popLower === routine.lower) {
+                        bestMatch = routine.original;
                         bestScore = 100;
                         break;
                     }
                     
-                    const score = jaroWinkler(popLower, routineLower) * 100;
+                    const score = jaroWinkler(popLower, routine.lower) * 100;
                     if (score > bestScore) {
                         bestScore = score;
-                        bestMatch = routineValue;
+                        bestMatch = routine.original;
                     }
                 }
                 
-                return {
-                    popValue,
-                    bestMatch,
-                    bestScore,
-                    count: popCounts[popValue] || 0
-                };
-            });
-            
-            // Sort by score descending to assign best matches first
-            allMatches.sort((a, b) => b.bestScore - a.bestScore);
-            
-            // Second pass: exclusive assignment
-            const usedRoutineValues = new Set();
-            const results = [];
-            
-            allMatches.forEach(match => {
-                const isAboveThreshold = match.bestScore >= threshold;
-                const routineNotUsed = match.bestMatch && !usedRoutineValues.has(match.bestMatch);
-                const isMatch = isAboveThreshold && routineNotUsed;
-                
-                if (isMatch) {
-                    usedRoutineValues.add(match.bestMatch);
-                }
+                const roundedScore = Math.round(bestScore);
+                const isMatch = roundedScore >= threshold;
                 
                 results.push({
-                    Population_Value: match.popValue,
-                    Routine_Value: isMatch ? match.bestMatch : '',
-                    Match_Score: Math.round(match.bestScore),
+                    Name_in_Population: popValue,
+                    Name_in_Routine: bestMatch || '',
+                    Match_Score: roundedScore,
                     Match_Status: isMatch ? 'MATCH' : 'UNMATCH',
-                    Standardized_Value: isMatch ? match.bestMatch : match.popValue,
-                    Count: match.count,
-                    Best_Possible_Match: match.bestMatch,
-                    Was_Taken: isAboveThreshold && !routineNotUsed
+                    Final_Value: isMatch ? bestMatch : popValue,
+                    Row_Count: popCounts[popValue] || 0
                 });
             });
             
-            // Sort: Unmatched first, then by score descending
+            // Sort: Matches first by score desc, then unmatches by score desc
             results.sort((a, b) => {
                 if (a.Match_Status !== b.Match_Status) {
-                    return a.Match_Status === 'UNMATCH' ? -1 : 1;
+                    return a.Match_Status === 'MATCH' ? -1 : 1;
                 }
                 return b.Match_Score - a.Match_Score;
             });
@@ -684,31 +657,28 @@
             const totalUnique = matchingResults.length;
             const matches = matchingResults.filter(r => r.Match_Status === 'MATCH').length;
             const unmatches = totalUnique - matches;
-            const totalRows = matchingResults.reduce((sum, r) => sum + r.Count, 0);
+            const totalRows = matchingResults.reduce((sum, r) => sum + r.Row_Count, 0);
             
-            // Stats
             document.getElementById('resultsStats').innerHTML = `
+                <div class="stats-card"><h4>Threshold</h4><div class="value">${threshold}%</div></div>
                 <div class="stats-card"><h4>Unique Pop Values</h4><div class="value">${totalUnique}</div></div>
-                <div class="stats-card success"><h4>Matched</h4><div class="value">${matches}</div></div>
-                <div class="stats-card warning"><h4>Unmatched</h4><div class="value">${unmatches}</div></div>
-                <div class="stats-card"><h4>Match Rate</h4><div class="value">${Math.round(matches/totalUnique*100)}%</div></div>
+                <div class="stats-card success"><h4>Matched (≥${threshold}%)</h4><div class="value">${matches}</div></div>
+                <div class="stats-card warning"><h4>Unmatched (<${threshold}%)</h4><div class="value">${unmatches}</div></div>
+                <div class="stats-card"><h4>Match Rate</h4><div class="value">${totalUnique > 0 ? Math.round(matches/totalUnique*100) : 0}%</div></div>
                 <div class="stats-card"><h4>Total Rows</h4><div class="value">${totalRows}</div></div>
             `;
             
-            // Results table
             let html = `
                 <div class="alert alert-info">
-                    <strong>How it works:</strong> Population values are matched to Routine values exclusively (each routine value can only be matched once).<br>
-                    <strong>Matched values:</strong> Will be replaced with the Routine value when applied.<br>
-                    <strong>Unmatched values:</strong> Will keep their original value (you can edit in the "Final Value" column).
+                    <strong>Logic:</strong> If Score ≥ ${threshold}% → MATCH (use Routine value). If Score < ${threshold}% → UNMATCH (keep Population value).<br>
+                    <strong>Edit:</strong> You can manually edit the "Final Value" column before applying.
                 </div>
             `;
             
             html += '<div class="table-container"><table class="results-table">';
             html += `<thead><tr>
-                <th>Population Value</th>
-                <th></th>
-                <th>Routine Value (If Matched)</th>
+                <th>Name in Population</th>
+                <th>Name in Routine (Best Match)</th>
                 <th>Score</th>
                 <th>Status</th>
                 <th>Final Value (Editable)</th>
@@ -717,16 +687,14 @@
             
             matchingResults.forEach((row, idx) => {
                 const rowClass = row.Match_Status === 'MATCH' ? 'match' : 'unmatch';
-                const statusNote = row.Was_Taken ? ' (routine already used)' : '';
                 
                 html += `<tr class="${rowClass}" id="row-${idx}">`;
-                html += `<td class="value-cell population">${escapeHtml(row.Population_Value)}</td>`;
-                html += `<td class="arrow-cell">${row.Match_Status === 'MATCH' ? '→' : ''}</td>`;
-                html += `<td class="value-cell routine">${row.Match_Status === 'MATCH' ? escapeHtml(row.Routine_Value) : '<span style="color:#999;">-</span>'}</td>`;
+                html += `<td class="value-cell population">${escapeHtml(row.Name_in_Population)}</td>`;
+                html += `<td class="value-cell routine">${escapeHtml(row.Name_in_Routine)}</td>`;
                 html += `<td><strong>${row.Match_Score}%</strong></td>`;
-                html += `<td><span class="match-badge ${row.Match_Status.toLowerCase()}">${row.Match_Status}</span>${statusNote}</td>`;
-                html += `<td><input type="text" class="rename-input standardized-input" data-idx="${idx}" value="${escapeHtml(row.Standardized_Value)}" style="width:100%;"></td>`;
-                html += `<td>${row.Count}</td>`;
+                html += `<td><span class="match-badge ${row.Match_Status.toLowerCase()}">${row.Match_Status}</span></td>`;
+                html += `<td><input type="text" class="rename-input final-value-input" data-idx="${idx}" value="${escapeHtml(row.Final_Value)}" style="width:100%;"></td>`;
+                html += `<td>${row.Row_Count}</td>`;
                 html += '</tr>';
             });
             
@@ -746,33 +714,32 @@
                 return;
             }
             
-            // Get user-edited standardized values
-            const inputs = document.querySelectorAll('.standardized-input');
+            // Get user-edited final values
+            const inputs = document.querySelectorAll('.final-value-input');
             inputs.forEach(input => {
                 const idx = parseInt(input.dataset.idx);
-                matchingResults[idx].Standardized_Value = input.value.trim();
+                matchingResults[idx].Final_Value = input.value.trim();
             });
             
-            // Create mapping: population value → standardized value
+            // Create mapping: population value → final value
             const mapping = {};
             matchingResults.forEach(r => {
-                mapping[r.Population_Value] = r.Standardized_Value;
+                mapping[r.Name_in_Population] = r.Final_Value;
             });
             
             // Apply mapping to population data
-            populationData = populationData.map(row => {
+            populationData = originalPopulationData.map(row => {
                 const newRow = { ...row };
                 const originalValue = String(row[matchColPopulation] || '').trim();
                 // Store original if not already stored
                 if (!newRow[matchColPopulation + '_Original']) {
                     newRow[matchColPopulation + '_Original'] = originalValue;
                 }
-                // Replace with standardized value
+                // Replace with final value
                 newRow[matchColPopulation] = mapping[originalValue] || originalValue;
                 return newRow;
             });
             
-            // Update UI to show applied state
             changesApplied = true;
             
             // Update all rows to show applied status
@@ -781,10 +748,16 @@
                 if (tableRow) {
                     tableRow.classList.remove('match', 'unmatch');
                     tableRow.classList.add('applied');
+                    const badge = tableRow.querySelector('.match-badge');
+                    if (badge) {
+                        badge.classList.remove('match', 'unmatch');
+                        badge.classList.add('applied');
+                        badge.textContent = 'APPLIED';
+                    }
                 }
             });
             
-            // Update stats to show applied
+            // Update stats
             const statsContainer = document.getElementById('resultsStats');
             statsContainer.innerHTML += `
                 <div class="stats-card" style="background:#cce5ff; border-color:#007bff;">
@@ -809,18 +782,18 @@
             
             const wb = XLSX.utils.book_new();
             
-            // Sheet 1: Cleaned Population Data
+            // Sheet 1: Standardized Population Data
             const ws1 = XLSX.utils.json_to_sheet(populationData);
             XLSX.utils.book_append_sheet(wb, ws1, 'Standardized Population Data');
             
             // Sheet 2: Mapping Reference
             const mappingData = matchingResults.map(r => ({
-                'Original Population Value': r.Population_Value,
-                'Matched Routine Value': r.Routine_Value || '',
+                'Name in Population': r.Name_in_Population,
+                'Name in Routine': r.Name_in_Routine,
                 'Match Score': r.Match_Score + '%',
                 'Match Status': r.Match_Status,
-                'Final Standardized Value': r.Standardized_Value,
-                'Row Count': r.Count
+                'Final Value Applied': r.Final_Value,
+                'Row Count': r.Row_Count
             }));
             const ws2 = XLSX.utils.json_to_sheet(mappingData);
             XLSX.utils.book_append_sheet(wb, ws2, 'Value Mapping Reference');
@@ -847,6 +820,7 @@
         function startOver() {
             routineData = null;
             populationData = null;
+            originalPopulationData = null;
             matchingResults = null;
             changesApplied = false;
             
