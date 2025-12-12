@@ -49,6 +49,10 @@
         .btn-success:hover { background: #218838; }
         .btn-gold { background: #ffc107; color: #000; border-color: #ffc107; }
         .btn-gold:hover { background: #e0a800; }
+        .btn-orange { background: #fd7e14; color: #fff; border-color: #fd7e14; }
+        .btn-orange:hover { background: #e96b02; }
+        .btn-info { background: #17a2b8; color: #fff; border-color: #17a2b8; }
+        .btn-info:hover { background: #138496; }
         
         .alert { padding: 1rem; border-radius: 6px; margin: 1rem 0; font-weight: 500; }
         .alert-success { background: #d4edda; border: 2px solid #28a745; color: #155724; }
@@ -69,7 +73,7 @@
         .config-card { background: #f8f9fa; padding: 1.5rem; border-radius: 8px; border: 2px solid #004080; margin: 1rem 0; }
         .config-card h4 { color: #004080; margin-bottom: 1rem; font-size: 16px; font-weight: 700; }
         
-        .table-container { max-height: 400px; overflow: auto; border: 2px solid #004080; border-radius: 6px; margin: 1rem 0; }
+        .table-container { max-height: 500px; overflow: auto; border: 2px solid #004080; border-radius: 6px; margin: 1rem 0; }
         .results-table { width: 100%; border-collapse: collapse; font-size: 13px; }
         .results-table th { background: #004080; color: #ffffff; padding: 0.75rem; text-align: left; font-weight: 700; position: sticky; top: 0; }
         .results-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #ddd; }
@@ -77,6 +81,7 @@
         .results-table tr:hover { background: #e7f3ff; }
         .results-table tr.match { background: #d4edda; }
         .results-table tr.unmatch { background: #f8d7da; }
+        .results-table tr.applied { background: #cce5ff; }
         
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin: 1rem 0; }
         .stats-card { background: #f8f9fa; padding: 1rem; border-radius: 8px; text-align: center; border: 2px solid #004080; }
@@ -104,9 +109,19 @@
         .match-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
         .match-badge.match { background: #28a745; color: #fff; }
         .match-badge.unmatch { background: #dc3545; color: #fff; }
+        .match-badge.applied { background: #007bff; color: #fff; }
         
         .loading-spinner { border: 4px solid #e7f3ff; border-top: 4px solid #004080; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .value-cell { font-weight: 600; }
+        .value-cell.routine { color: #004080; }
+        .value-cell.population { color: #6c757d; }
+        .arrow-cell { color: #28a745; font-weight: 700; font-size: 16px; }
+        
+        .button-group { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 2rem; }
+        
+        .applied-indicator { display: inline-block; padding: 4px 10px; background: #007bff; color: #fff; border-radius: 4px; font-size: 11px; font-weight: 700; margin-left: 8px; }
         
         .page-footer { background-color: #004080; color: #ffffff; padding: 20px 30px; text-align: center; font-size: 13px; line-height: 1.7; border-radius: 0 0 8px 8px; }
         .page-footer p { margin: 6px 0 0; font-size: 12px; }
@@ -123,7 +138,7 @@
             <h3>Informatics Consultancy Firm-Sierra Leone (ICF-SL)</h3>
             <p class="tagline"><em>Driving Data-Driven Solutions for Health and Development</em></p>
             <h1>FUZZY NAME MATCHING TOOL</h1>
-            <p class="subtitle">Match Names Between Routine Data & Population Data Using Fuzzy Matching</p>
+            <p class="subtitle">Standardize Population Data Names to Match Routine Data Categories</p>
         </div>
 
         <div class="content-card">
@@ -148,7 +163,7 @@
                     <div class="form-row">
                         <div class="upload-section">
                             <h4>📊 ROUTINE DATA</h4>
-                            <p>Upload the file containing routine health data</p>
+                            <p>Upload the file containing routine health data (reference values)</p>
                             <label class="file-input-wrapper">
                                 Choose File
                                 <input type="file" id="routineFileInput" accept=".csv,.xlsx,.xls">
@@ -158,7 +173,7 @@
 
                         <div class="upload-section">
                             <h4>👥 POPULATION DATA</h4>
-                            <p>Upload the file containing population data</p>
+                            <p>Upload the file containing population data (to be standardized)</p>
                             <label class="file-input-wrapper">
                                 Choose File
                                 <input type="file" id="populationFileInput" accept=".csv,.xlsx,.xls">
@@ -167,14 +182,8 @@
                         </div>
                     </div>
 
-                    <div id="previewContainer" class="hidden">
-                        <div class="form-row">
-                            <div id="routinePreview"></div>
-                            <div id="populationPreview"></div>
-                        </div>
-                        <div style="text-align: center; margin-top: 1.5rem;">
-                            <button id="proceedToRenameBtn" class="btn btn-primary">Proceed to Column Renaming →</button>
-                        </div>
+                    <div id="proceedContainer" class="hidden" style="text-align: center; margin-top: 1.5rem;">
+                        <button id="proceedToRenameBtn" class="btn btn-primary">Proceed to Column Renaming →</button>
                     </div>
                 </div>
 
@@ -217,13 +226,13 @@
                         <h4>Select Name Columns to Match</h4>
                         <div class="form-row">
                             <div class="form-group">
-                                <label for="routineColumn">Name Column in Routine Data:</label>
+                                <label for="routineColumn">Name Column in Routine Data (Reference):</label>
                                 <select id="routineColumn" class="form-control">
                                     <option value="">-- Select Column --</option>
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="populationColumn">Name Column in Population Data:</label>
+                                <label for="populationColumn">Name Column in Population Data (To Standardize):</label>
                                 <select id="populationColumn" class="form-control">
                                     <option value="">-- Select Column --</option>
                                 </select>
@@ -234,7 +243,7 @@
                     <div class="config-card">
                         <h4>Set Match Threshold</h4>
                         <p style="color: #666; font-size: 13px; margin-bottom: 1rem;">
-                            Names with similarity score ≥ threshold will be marked as "Match". Lower threshold = more matches but less accurate.
+                            Population values with similarity ≥ threshold will be mapped to routine values. Each routine value can only be matched once (exclusive matching).
                         </p>
                         <div class="slider-container">
                             <input type="range" id="threshold" class="slider" min="0" max="100" value="70">
@@ -264,9 +273,11 @@
 
                     <div id="resultsContainer"></div>
 
-                    <div style="text-align: center; margin-top: 2rem;">
-                        <button id="downloadExcelBtn" class="btn btn-success">📥 Download Results (Excel)</button>
-                        <button id="downloadCSVBtn" class="btn btn-primary">📥 Download Results (CSV)</button>
+                    <div class="button-group">
+                        <button id="modifyThresholdBtn" class="btn btn-secondary">← Modify Threshold</button>
+                        <button id="applyChangesBtn" class="btn btn-orange" style="font-size:16px; padding:14px 28px;">✓ APPLY CHANGES</button>
+                        <button id="downloadExcelBtn" class="btn btn-gold hidden">📥 Download Excel</button>
+                        <button id="downloadCSVBtn" class="btn btn-success hidden">📥 Download CSV</button>
                         <button id="startOverBtn" class="btn btn-secondary">Start Over</button>
                     </div>
                 </div>
@@ -288,6 +299,7 @@
         let matchingResults = null;
         let routineFileName = '';
         let populationFileName = '';
+        let changesApplied = false;
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
@@ -297,6 +309,8 @@
             document.getElementById('applyRenamingBtn').addEventListener('click', applyRenaming);
             document.getElementById('skipRenamingBtn').addEventListener('click', () => { setupColumnSelection(); showStep(3); });
             document.getElementById('performMatchingBtn').addEventListener('click', performMatching);
+            document.getElementById('modifyThresholdBtn').addEventListener('click', () => { changesApplied = false; showStep(3); });
+            document.getElementById('applyChangesBtn').addEventListener('click', applyChanges);
             document.getElementById('downloadExcelBtn').addEventListener('click', downloadExcel);
             document.getElementById('downloadCSVBtn').addEventListener('click', downloadCSV);
             document.getElementById('startOverBtn').addEventListener('click', startOver);
@@ -353,7 +367,6 @@
                             populationFileName = fileName;
                         }
                         statusEl.innerHTML = `<span class="file-status loaded">✓ ${fileName} (${results.data.length} rows)</span>`;
-                        showPreview(type);
                         checkIfReadyToProceed();
                     },
                     error: function(error) {
@@ -377,7 +390,6 @@
                             populationFileName = fileName;
                         }
                         statusEl.innerHTML = `<span class="file-status loaded">✓ ${fileName} (${jsonData.length} rows)</span>`;
-                        showPreview(type);
                         checkIfReadyToProceed();
                     } catch (error) {
                         showAlert('Error reading Excel: ' + error.message, 'error');
@@ -388,33 +400,11 @@
             }
         }
 
-        function showPreview(type) {
-            const data = type === 'routine' ? routineData : populationData;
-            const container = document.getElementById(`${type}Preview`);
-            const title = type === 'routine' ? '📊 Routine Data' : '👥 Population Data';
-            
-            if (!data || data.length === 0) return;
-
-            let html = `<div class="config-card"><h4>${title} Preview</h4>`;
-            html += '<div class="table-container" style="max-height: 200px;"><table class="results-table">';
-            html += '<thead><tr>';
-            Object.keys(data[0]).forEach(col => html += `<th>${col}</th>`);
-            html += '</tr></thead><tbody>';
-            data.slice(0, 5).forEach(row => {
-                html += '<tr>';
-                Object.values(row).forEach(val => html += `<td>${val || ''}</td>`);
-                html += '</tr>';
-            });
-            html += '</tbody></table></div></div>';
-            
-            container.innerHTML = html;
-        }
-
         function checkIfReadyToProceed() {
             if (routineData && populationData) {
-                document.getElementById('previewContainer').classList.remove('hidden');
+                document.getElementById('proceedContainer').classList.remove('hidden');
                 setupRenaming();
-                showAlert('Both files loaded successfully!', 'success');
+                showAlert('Both files loaded successfully! Click "Proceed" to continue.', 'success');
             }
         }
 
@@ -497,6 +487,10 @@
             });
         }
 
+        // Store column names globally
+        let matchColRoutine = '';
+        let matchColPopulation = '';
+
         function performMatching() {
             const routineCol = document.getElementById('routineColumn').value;
             const populationCol = document.getElementById('populationColumn').value;
@@ -507,73 +501,130 @@
                 return;
             }
             
-            showAlert('Performing fuzzy matching... This may take a moment.', 'info');
+            matchColRoutine = routineCol;
+            matchColPopulation = populationCol;
+            changesApplied = false;
             
+            // Reset button visibility
+            document.getElementById('applyChangesBtn').classList.remove('hidden');
+            document.getElementById('downloadExcelBtn').classList.add('hidden');
+            document.getElementById('downloadCSVBtn').classList.add('hidden');
+            
+            // Show loading immediately
+            showStep(4);
+            document.getElementById('resultsStats').innerHTML = '';
+            document.getElementById('resultsContainer').innerHTML = `
+                <div style="text-align:center; padding:2rem;">
+                    <div class="loading-spinner"></div>
+                    <p id="matchProgress" style="margin-top:1rem; color:#004080; font-weight:700;">Extracting unique values...</p>
+                </div>
+            `;
+            
+            // Use setTimeout to allow UI to update
             setTimeout(() => {
                 try {
-                    matchingResults = calculateMatches(routineData, populationData, routineCol, populationCol, threshold);
-                    displayResults(threshold);
-                    showStep(4);
-                    showAlert('Matching completed!', 'success');
+                    // Step 1: Extract UNIQUE values only
+                    const routineUnique = [...new Set(
+                        routineData.map(r => String(r[routineCol] || '').trim()).filter(v => v)
+                    )];
+                    const populationUnique = [...new Set(
+                        populationData.map(r => String(r[populationCol] || '').trim()).filter(v => v)
+                    )];
+                    
+                    document.getElementById('matchProgress').textContent = 
+                        `Found ${routineUnique.length} unique routine values, ${populationUnique.length} unique population values. Matching...`;
+                    
+                    setTimeout(() => {
+                        // Step 2: Match UNIQUE population values to routine values (exclusive matching)
+                        matchingResults = matchUniqueValuesExclusive(populationUnique, routineUnique, threshold, populationCol);
+                        displayResults(threshold);
+                        showAlert(`Done! Matched ${populationUnique.length} unique population values.`, 'success');
+                    }, 50);
+                    
                 } catch (error) {
                     showAlert('Error during matching: ' + error.message, 'error');
                 }
-            }, 100);
+            }, 50);
         }
 
-        function calculateMatches(routine, population, routineCol, populationCol, threshold) {
-            const results = [];
+        /**
+         * Match unique population values to unique routine values with EXCLUSIVE matching
+         * Once a routine value is matched, it's removed from the pool
+         */
+        function matchUniqueValuesExclusive(populationUnique, routineUnique, threshold, populationCol) {
+            // Count occurrences in population data for each unique value
+            const popCounts = {};
+            populationData.forEach(row => {
+                const val = String(row[populationCol] || '').trim();
+                popCounts[val] = (popCounts[val] || 0) + 1;
+            });
             
-            routine.forEach(routineRow => {
-                const routineValue = String(routineRow[routineCol] || '').trim();
-                const routineLower = routineValue.toLowerCase();
-                
+            // First pass: calculate best match scores for all population values
+            const allMatches = populationUnique.map(popValue => {
+                const popLower = popValue.toLowerCase();
                 let bestMatch = null;
                 let bestScore = 0;
                 
-                population.forEach(popRow => {
-                    const popValue = String(popRow[populationCol] || '').trim();
-                    const popLower = popValue.toLowerCase();
+                for (const routineValue of routineUnique) {
+                    const routineLower = routineValue.toLowerCase();
                     
-                    const score = jaroWinkler(routineLower, popLower) * 100;
+                    // Exact match check
+                    if (popLower === routineLower) {
+                        bestMatch = routineValue;
+                        bestScore = 100;
+                        break;
+                    }
                     
+                    const score = jaroWinkler(popLower, routineLower) * 100;
                     if (score > bestScore) {
                         bestScore = score;
-                        bestMatch = popRow;
+                        bestMatch = routineValue;
                     }
-                });
-                
-                const isMatch = bestScore >= threshold;
-                
-                const resultRow = {
-                    'Name_in_Routine': routineValue,
-                    'Best_Match_in_Population': bestMatch ? bestMatch[populationCol] : '',
-                    'Match_Score': Math.round(bestScore),
-                    'Match_Status': isMatch ? 'MATCH' : 'UNMATCH',
-                    'Suggested_Name': isMatch && bestMatch ? bestMatch[populationCol] : routineValue
-                };
-                
-                // Add other routine columns
-                Object.entries(routineRow).forEach(([key, value]) => {
-                    if (key !== routineCol) {
-                        resultRow[`${key}_Routine`] = value;
-                    }
-                });
-                
-                // Add matched population columns
-                if (bestMatch) {
-                    Object.entries(bestMatch).forEach(([key, value]) => {
-                        if (key !== populationCol) {
-                            resultRow[`${key}_Population`] = value;
-                        }
-                    });
                 }
                 
-                results.push(resultRow);
+                return {
+                    popValue,
+                    bestMatch,
+                    bestScore,
+                    count: popCounts[popValue] || 0
+                };
             });
             
-            // Sort by match score descending
-            results.sort((a, b) => b.Match_Score - a.Match_Score);
+            // Sort by score descending to assign best matches first
+            allMatches.sort((a, b) => b.bestScore - a.bestScore);
+            
+            // Second pass: exclusive assignment
+            const usedRoutineValues = new Set();
+            const results = [];
+            
+            allMatches.forEach(match => {
+                const isAboveThreshold = match.bestScore >= threshold;
+                const routineNotUsed = match.bestMatch && !usedRoutineValues.has(match.bestMatch);
+                const isMatch = isAboveThreshold && routineNotUsed;
+                
+                if (isMatch) {
+                    usedRoutineValues.add(match.bestMatch);
+                }
+                
+                results.push({
+                    Population_Value: match.popValue,
+                    Routine_Value: isMatch ? match.bestMatch : '',
+                    Match_Score: Math.round(match.bestScore),
+                    Match_Status: isMatch ? 'MATCH' : 'UNMATCH',
+                    Standardized_Value: isMatch ? match.bestMatch : match.popValue,
+                    Count: match.count,
+                    Best_Possible_Match: match.bestMatch,
+                    Was_Taken: isAboveThreshold && !routineNotUsed
+                });
+            });
+            
+            // Sort: Unmatched first, then by score descending
+            results.sort((a, b) => {
+                if (a.Match_Status !== b.Match_Status) {
+                    return a.Match_Status === 'UNMATCH' ? -1 : 1;
+                }
+                return b.Match_Score - a.Match_Score;
+            });
             
             return results;
         }
@@ -595,7 +646,6 @@
             let matches = 0;
             let transpositions = 0;
             
-            // Find matches
             for (let i = 0; i < len1; i++) {
                 const start = Math.max(0, i - matchWindow);
                 const end = Math.min(i + matchWindow + 1, len2);
@@ -611,7 +661,6 @@
             
             if (matches === 0) return 0;
             
-            // Count transpositions
             let k = 0;
             for (let i = 0; i < len1; i++) {
                 if (!s1Matches[i]) continue;
@@ -622,7 +671,6 @@
             
             const jaro = (matches / len1 + matches / len2 + (matches - transpositions / 2) / matches) / 3;
             
-            // Winkler prefix bonus
             let prefix = 0;
             for (let i = 0; i < Math.min(len1, len2, 4); i++) {
                 if (s1[i] === s2[i]) prefix++;
@@ -633,89 +681,180 @@
         }
 
         function displayResults(threshold) {
-            const totalRecords = matchingResults.length;
+            const totalUnique = matchingResults.length;
             const matches = matchingResults.filter(r => r.Match_Status === 'MATCH').length;
-            const unmatches = totalRecords - matches;
-            const avgScore = Math.round(matchingResults.reduce((sum, r) => sum + r.Match_Score, 0) / totalRecords);
+            const unmatches = totalUnique - matches;
+            const totalRows = matchingResults.reduce((sum, r) => sum + r.Count, 0);
             
             // Stats
             document.getElementById('resultsStats').innerHTML = `
-                <div class="stats-card"><h4>Total Records</h4><div class="value">${totalRecords}</div></div>
-                <div class="stats-card success"><h4>Matches (≥${threshold}%)</h4><div class="value">${matches}</div></div>
+                <div class="stats-card"><h4>Unique Pop Values</h4><div class="value">${totalUnique}</div></div>
+                <div class="stats-card success"><h4>Matched</h4><div class="value">${matches}</div></div>
                 <div class="stats-card warning"><h4>Unmatched</h4><div class="value">${unmatches}</div></div>
-                <div class="stats-card"><h4>Match Rate</h4><div class="value">${Math.round(matches/totalRecords*100)}%</div></div>
-                <div class="stats-card"><h4>Avg Score</h4><div class="value">${avgScore}%</div></div>
+                <div class="stats-card"><h4>Match Rate</h4><div class="value">${Math.round(matches/totalUnique*100)}%</div></div>
+                <div class="stats-card"><h4>Total Rows</h4><div class="value">${totalRows}</div></div>
             `;
             
-            // Table
-            let html = '<div class="table-container"><table class="results-table">';
-            html += '<thead><tr>';
-            ['Name_in_Routine', 'Best_Match_in_Population', 'Match_Score', 'Match_Status', 'Suggested_Name'].forEach(col => {
-                html += `<th>${col.replace(/_/g, ' ')}</th>`;
-            });
-            html += '</tr></thead><tbody>';
+            // Results table
+            let html = `
+                <div class="alert alert-info">
+                    <strong>How it works:</strong> Population values are matched to Routine values exclusively (each routine value can only be matched once).<br>
+                    <strong>Matched values:</strong> Will be replaced with the Routine value when applied.<br>
+                    <strong>Unmatched values:</strong> Will keep their original value (you can edit in the "Final Value" column).
+                </div>
+            `;
             
-            matchingResults.slice(0, 100).forEach(row => {
+            html += '<div class="table-container"><table class="results-table">';
+            html += `<thead><tr>
+                <th>Population Value</th>
+                <th></th>
+                <th>Routine Value (If Matched)</th>
+                <th>Score</th>
+                <th>Status</th>
+                <th>Final Value (Editable)</th>
+                <th>Rows</th>
+            </tr></thead><tbody>`;
+            
+            matchingResults.forEach((row, idx) => {
                 const rowClass = row.Match_Status === 'MATCH' ? 'match' : 'unmatch';
-                html += `<tr class="${rowClass}">`;
-                html += `<td>${row.Name_in_Routine}</td>`;
-                html += `<td>${row.Best_Match_in_Population}</td>`;
+                const statusNote = row.Was_Taken ? ' (routine already used)' : '';
+                
+                html += `<tr class="${rowClass}" id="row-${idx}">`;
+                html += `<td class="value-cell population">${escapeHtml(row.Population_Value)}</td>`;
+                html += `<td class="arrow-cell">${row.Match_Status === 'MATCH' ? '→' : ''}</td>`;
+                html += `<td class="value-cell routine">${row.Match_Status === 'MATCH' ? escapeHtml(row.Routine_Value) : '<span style="color:#999;">-</span>'}</td>`;
                 html += `<td><strong>${row.Match_Score}%</strong></td>`;
-                html += `<td><span class="match-badge ${row.Match_Status.toLowerCase()}">${row.Match_Status}</span></td>`;
-                html += `<td>${row.Suggested_Name}</td>`;
+                html += `<td><span class="match-badge ${row.Match_Status.toLowerCase()}">${row.Match_Status}</span>${statusNote}</td>`;
+                html += `<td><input type="text" class="rename-input standardized-input" data-idx="${idx}" value="${escapeHtml(row.Standardized_Value)}" style="width:100%;"></td>`;
+                html += `<td>${row.Count}</td>`;
                 html += '</tr>';
             });
             
             html += '</tbody></table></div>';
             
-            if (matchingResults.length > 100) {
-                html += `<p style="color:#666; margin-top:1rem; text-align:center;">Showing first 100 of ${matchingResults.length} results. Download to see all.</p>`;
+            document.getElementById('resultsContainer').innerHTML = html;
+        }
+        
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function applyChanges() {
+            if (!matchingResults) {
+                showAlert('No results to apply', 'error');
+                return;
             }
             
-            document.getElementById('resultsContainer').innerHTML = html;
+            // Get user-edited standardized values
+            const inputs = document.querySelectorAll('.standardized-input');
+            inputs.forEach(input => {
+                const idx = parseInt(input.dataset.idx);
+                matchingResults[idx].Standardized_Value = input.value.trim();
+            });
+            
+            // Create mapping: population value → standardized value
+            const mapping = {};
+            matchingResults.forEach(r => {
+                mapping[r.Population_Value] = r.Standardized_Value;
+            });
+            
+            // Apply mapping to population data
+            populationData = populationData.map(row => {
+                const newRow = { ...row };
+                const originalValue = String(row[matchColPopulation] || '').trim();
+                // Store original if not already stored
+                if (!newRow[matchColPopulation + '_Original']) {
+                    newRow[matchColPopulation + '_Original'] = originalValue;
+                }
+                // Replace with standardized value
+                newRow[matchColPopulation] = mapping[originalValue] || originalValue;
+                return newRow;
+            });
+            
+            // Update UI to show applied state
+            changesApplied = true;
+            
+            // Update all rows to show applied status
+            matchingResults.forEach((row, idx) => {
+                const tableRow = document.getElementById(`row-${idx}`);
+                if (tableRow) {
+                    tableRow.classList.remove('match', 'unmatch');
+                    tableRow.classList.add('applied');
+                }
+            });
+            
+            // Update stats to show applied
+            const statsContainer = document.getElementById('resultsStats');
+            statsContainer.innerHTML += `
+                <div class="stats-card" style="background:#cce5ff; border-color:#007bff;">
+                    <h4>Status</h4>
+                    <div class="value" style="color:#007bff; font-size:1rem;">✓ APPLIED</div>
+                </div>
+            `;
+            
+            // Show download buttons, hide apply button
+            document.getElementById('applyChangesBtn').classList.add('hidden');
+            document.getElementById('downloadExcelBtn').classList.remove('hidden');
+            document.getElementById('downloadCSVBtn').classList.remove('hidden');
+            
+            showAlert('Changes applied successfully! You can now download the standardized data.', 'success');
         }
 
         function downloadExcel() {
-            if (!matchingResults) {
-                showAlert('No results to download', 'error');
+            if (!changesApplied) {
+                showAlert('Please apply changes first before downloading', 'warning');
                 return;
             }
             
             const wb = XLSX.utils.book_new();
-            const ws = XLSX.utils.json_to_sheet(matchingResults);
-            XLSX.utils.book_append_sheet(wb, ws, 'Matching Results');
             
-            XLSX.writeFile(wb, 'fuzzy_matching_results.xlsx');
-            showAlert('Excel file downloaded!', 'success');
+            // Sheet 1: Cleaned Population Data
+            const ws1 = XLSX.utils.json_to_sheet(populationData);
+            XLSX.utils.book_append_sheet(wb, ws1, 'Standardized Population Data');
+            
+            // Sheet 2: Mapping Reference
+            const mappingData = matchingResults.map(r => ({
+                'Original Population Value': r.Population_Value,
+                'Matched Routine Value': r.Routine_Value || '',
+                'Match Score': r.Match_Score + '%',
+                'Match Status': r.Match_Status,
+                'Final Standardized Value': r.Standardized_Value,
+                'Row Count': r.Count
+            }));
+            const ws2 = XLSX.utils.json_to_sheet(mappingData);
+            XLSX.utils.book_append_sheet(wb, ws2, 'Value Mapping Reference');
+            
+            XLSX.writeFile(wb, 'standardized_population_data.xlsx');
+            showAlert('Excel file downloaded successfully!', 'success');
         }
 
         function downloadCSV() {
-            if (!matchingResults) {
-                showAlert('No results to download', 'error');
+            if (!changesApplied) {
+                showAlert('Please apply changes first before downloading', 'warning');
                 return;
             }
             
-            const csv = Papa.unparse(matchingResults);
+            const csv = Papa.unparse(populationData);
             const blob = new Blob([csv], { type: 'text/csv' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = 'fuzzy_matching_results.csv';
+            a.download = 'standardized_population_data.csv';
             a.click();
-            showAlert('CSV file downloaded!', 'success');
+            showAlert('CSV file downloaded successfully!', 'success');
         }
 
         function startOver() {
             routineData = null;
             populationData = null;
             matchingResults = null;
+            changesApplied = false;
             
             document.getElementById('routineFileInput').value = '';
             document.getElementById('populationFileInput').value = '';
             document.getElementById('routineFileStatus').innerHTML = '';
             document.getElementById('populationFileStatus').innerHTML = '';
-            document.getElementById('routinePreview').innerHTML = '';
-            document.getElementById('populationPreview').innerHTML = '';
-            document.getElementById('previewContainer').classList.add('hidden');
+            document.getElementById('proceedContainer').classList.add('hidden');
             
             showStep(1);
             showAlert('Reset complete. Upload new files to start.', 'info');
