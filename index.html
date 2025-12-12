@@ -51,8 +51,6 @@
         .btn-gold:hover { background: #e0a800; }
         .btn-orange { background: #fd7e14; color: #fff; border-color: #fd7e14; }
         .btn-orange:hover { background: #e96b02; }
-        .btn-info { background: #17a2b8; color: #fff; border-color: #17a2b8; }
-        .btn-info:hover { background: #138496; }
         
         .alert { padding: 1rem; border-radius: 6px; margin: 1rem 0; font-weight: 500; }
         .alert-success { background: #d4edda; border: 2px solid #28a745; color: #155724; }
@@ -83,12 +81,16 @@
         .results-table tr.unmatch { background: #f8d7da; }
         .results-table tr.applied { background: #cce5ff; }
         
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin: 1rem 0; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin: 1rem 0; }
         .stats-card { background: #f8f9fa; padding: 1rem; border-radius: 8px; text-align: center; border: 2px solid #004080; }
         .stats-card h4 { color: #666; font-size: 11px; margin-bottom: 0.5rem; text-transform: uppercase; }
         .stats-card .value { font-size: 1.5rem; color: #004080; font-weight: 700; }
         .stats-card.success .value { color: #28a745; }
         .stats-card.warning .value { color: #dc3545; }
+        .stats-card.routine { border-color: #17a2b8; }
+        .stats-card.routine .value { color: #17a2b8; }
+        .stats-card.population { border-color: #6c757d; }
+        .stats-card.population .value { color: #6c757d; }
         
         .slider-container { margin: 1rem 0; }
         .slider-container label { display: block; margin-bottom: 0.5rem; font-weight: 700; color: #004080; }
@@ -119,6 +121,11 @@
         .value-cell.population { color: #6c757d; }
         
         .button-group { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 2rem; }
+        
+        .routine-values-box { background: #e7f3ff; border: 2px solid #17a2b8; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+        .routine-values-box h5 { color: #17a2b8; font-size: 14px; margin-bottom: 0.5rem; }
+        .routine-values-list { max-height: 150px; overflow-y: auto; font-size: 12px; color: #333; }
+        .routine-values-list span { display: inline-block; background: #fff; border: 1px solid #17a2b8; padding: 2px 8px; margin: 2px; border-radius: 4px; }
         
         .page-footer { background-color: #004080; color: #ffffff; padding: 20px 30px; text-align: center; font-size: 13px; line-height: 1.7; border-radius: 0 0 8px 8px; }
         .page-footer p { margin: 6px 0 0; font-size: 12px; }
@@ -240,7 +247,7 @@
                     <div class="config-card">
                         <h4>Set Match Threshold</h4>
                         <p style="color: #666; font-size: 13px; margin-bottom: 1rem;">
-                            Population values with similarity score ≥ threshold will be marked as MATCH and use the routine value. Values below threshold remain UNMATCH and keep original.
+                            Population values with similarity score ≥ threshold will be marked as MATCH and replaced with the routine value.
                         </p>
                         <div class="slider-container">
                             <input type="range" id="threshold" class="slider" min="0" max="100" value="70">
@@ -267,6 +274,8 @@
                     </div>
 
                     <div class="stats-grid" id="resultsStats"></div>
+                    
+                    <div id="routineValuesContainer"></div>
 
                     <div id="resultsContainer"></div>
 
@@ -298,6 +307,8 @@
         let routineFileName = '';
         let populationFileName = '';
         let changesApplied = false;
+        let routineUniqueValues = [];
+        let populationUniqueValues = [];
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
@@ -512,6 +523,7 @@
             
             showStep(4);
             document.getElementById('resultsStats').innerHTML = '';
+            document.getElementById('routineValuesContainer').innerHTML = '';
             document.getElementById('resultsContainer').innerHTML = `
                 <div style="text-align:center; padding:2rem;">
                     <div class="loading-spinner"></div>
@@ -521,18 +533,20 @@
             
             setTimeout(() => {
                 try {
-                    const routineUnique = [...new Set(
+                    // Extract unique values
+                    routineUniqueValues = [...new Set(
                         routineData.map(r => String(r[routineCol] || '').trim()).filter(v => v)
-                    )];
-                    const populationUnique = [...new Set(
+                    )].sort();
+                    
+                    populationUniqueValues = [...new Set(
                         populationData.map(r => String(r[populationCol] || '').trim()).filter(v => v)
-                    )];
+                    )].sort();
                     
                     document.getElementById('matchProgress').textContent = 
-                        `Found ${routineUnique.length} routine values, ${populationUnique.length} population values. Matching...`;
+                        `Found ${routineUniqueValues.length} unique routine values, ${populationUniqueValues.length} unique population values. Matching...`;
                     
                     setTimeout(() => {
-                        matchingResults = matchUniqueValues(populationUnique, routineUnique, threshold, populationCol);
+                        matchingResults = matchUniqueValues(populationUniqueValues, routineUniqueValues, threshold, populationCol);
                         displayResults(threshold);
                         showAlert(`Matching complete! Threshold: ${threshold}%`, 'success');
                     }, 50);
@@ -545,15 +559,8 @@
 
         /**
          * Match unique population values to routine values
-         * Any routine value can match multiple population values
          */
         function matchUniqueValues(populationUnique, routineUnique, threshold, populationCol) {
-            const popCounts = {};
-            populationData.forEach(row => {
-                const val = String(row[populationCol] || '').trim();
-                popCounts[val] = (popCounts[val] || 0) + 1;
-            });
-            
             const routineLowerMap = routineUnique.map(v => ({ original: v, lower: v.toLowerCase() }));
             
             const results = [];
@@ -586,8 +593,7 @@
                     Name_in_Routine: bestMatch || '',
                     Match_Score: roundedScore,
                     Match_Status: isMatch ? 'MATCH' : 'UNMATCH',
-                    Final_Value: isMatch ? bestMatch : popValue,
-                    Row_Count: popCounts[popValue] || 0
+                    Final_Value: isMatch ? bestMatch : popValue
                 });
             });
             
@@ -654,18 +660,28 @@
         }
 
         function displayResults(threshold) {
-            const totalUnique = matchingResults.length;
+            const uniqueRoutineCount = routineUniqueValues.length;
+            const uniquePopCount = populationUniqueValues.length;
             const matches = matchingResults.filter(r => r.Match_Status === 'MATCH').length;
-            const unmatches = totalUnique - matches;
-            const totalRows = matchingResults.reduce((sum, r) => sum + r.Row_Count, 0);
+            const unmatches = uniquePopCount - matches;
             
+            // Stats - showing unique counts for both
             document.getElementById('resultsStats').innerHTML = `
                 <div class="stats-card"><h4>Threshold</h4><div class="value">${threshold}%</div></div>
-                <div class="stats-card"><h4>Unique Pop Values</h4><div class="value">${totalUnique}</div></div>
+                <div class="stats-card routine"><h4>Unique Routine Values</h4><div class="value">${uniqueRoutineCount}</div></div>
+                <div class="stats-card population"><h4>Unique Population Values</h4><div class="value">${uniquePopCount}</div></div>
                 <div class="stats-card success"><h4>Matched (≥${threshold}%)</h4><div class="value">${matches}</div></div>
                 <div class="stats-card warning"><h4>Unmatched (<${threshold}%)</h4><div class="value">${unmatches}</div></div>
-                <div class="stats-card"><h4>Match Rate</h4><div class="value">${totalUnique > 0 ? Math.round(matches/totalUnique*100) : 0}%</div></div>
-                <div class="stats-card"><h4>Total Rows</h4><div class="value">${totalRows}</div></div>
+            `;
+            
+            // Show routine values for reference
+            document.getElementById('routineValuesContainer').innerHTML = `
+                <div class="routine-values-box">
+                    <h5>📊 Reference: All Unique Routine Values (${uniqueRoutineCount} values)</h5>
+                    <div class="routine-values-list">
+                        ${routineUniqueValues.map(v => `<span>${escapeHtml(v)}</span>`).join('')}
+                    </div>
+                </div>
             `;
             
             let html = `
@@ -682,7 +698,6 @@
                 <th>Score</th>
                 <th>Status</th>
                 <th>Final Value (Editable)</th>
-                <th>Rows</th>
             </tr></thead><tbody>`;
             
             matchingResults.forEach((row, idx) => {
@@ -694,7 +709,6 @@
                 html += `<td><strong>${row.Match_Score}%</strong></td>`;
                 html += `<td><span class="match-badge ${row.Match_Status.toLowerCase()}">${row.Match_Status}</span></td>`;
                 html += `<td><input type="text" class="rename-input final-value-input" data-idx="${idx}" value="${escapeHtml(row.Final_Value)}" style="width:100%;"></td>`;
-                html += `<td>${row.Row_Count}</td>`;
                 html += '</tr>';
             });
             
@@ -792,11 +806,15 @@
                 'Name in Routine': r.Name_in_Routine,
                 'Match Score': r.Match_Score + '%',
                 'Match Status': r.Match_Status,
-                'Final Value Applied': r.Final_Value,
-                'Row Count': r.Row_Count
+                'Final Value Applied': r.Final_Value
             }));
             const ws2 = XLSX.utils.json_to_sheet(mappingData);
             XLSX.utils.book_append_sheet(wb, ws2, 'Value Mapping Reference');
+            
+            // Sheet 3: Routine Values Reference
+            const routineRefData = routineUniqueValues.map(v => ({ 'Routine Value': v }));
+            const ws3 = XLSX.utils.json_to_sheet(routineRefData);
+            XLSX.utils.book_append_sheet(wb, ws3, 'Routine Values Reference');
             
             XLSX.writeFile(wb, 'standardized_population_data.xlsx');
             showAlert('Excel file downloaded successfully!', 'success');
@@ -823,6 +841,8 @@
             originalPopulationData = null;
             matchingResults = null;
             changesApplied = false;
+            routineUniqueValues = [];
+            populationUniqueValues = [];
             
             document.getElementById('routineFileInput').value = '';
             document.getElementById('populationFileInput').value = '';
