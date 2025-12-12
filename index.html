@@ -796,9 +796,25 @@
             
             const wb = XLSX.utils.book_new();
             
-            // Single sheet with standardized population data
-            const ws = XLSX.utils.json_to_sheet(populationData);
-            XLSX.utils.book_append_sheet(wb, ws, 'Standardized Data');
+            // Sheet 1: Standardized Population Data
+            const ws1 = XLSX.utils.json_to_sheet(populationData);
+            XLSX.utils.book_append_sheet(wb, ws1, 'Standardized Population Data');
+            
+            // Sheet 2: Mapping Reference
+            const mappingData = matchingResults.map(r => ({
+                'Name in Population': r.Name_in_Population,
+                'Name in Routine': r.Name_in_Routine,
+                'Match Score': r.Match_Score + '%',
+                'Match Status': r.Match_Status,
+                'Final Value Applied': r.Final_Value
+            }));
+            const ws2 = XLSX.utils.json_to_sheet(mappingData);
+            XLSX.utils.book_append_sheet(wb, ws2, 'Value Mapping Reference');
+            
+            // Sheet 3: Routine Values Reference
+            const routineRefData = routineUniqueValues.map(v => ({ 'Routine Value': v }));
+            const ws3 = XLSX.utils.json_to_sheet(routineRefData);
+            XLSX.utils.book_append_sheet(wb, ws3, 'Routine Values Reference');
             
             XLSX.writeFile(wb, 'standardized_population_data.xlsx');
             showAlert('Excel file downloaded successfully!', 'success');
